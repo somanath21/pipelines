@@ -1,0 +1,74 @@
+pipeline { 
+
+  environment { 
+      registryIBM = "us.icr.io/phee-ns/fineract" 
+      registryCredentialIBM = 'ibmcr'
+  }
+  
+  tools {
+    jdk 'Java17'
+  }
+  
+  options {
+        skipStagesAfterUnstable()
+  }
+  
+  triggers { 
+    githubPush() 
+  }
+
+  agent any 
+
+   
+  stages { 
+      
+      stage('Pre Build Cache Clean') {
+          steps {
+               sh "rm -f  /var/lib/jenkins/.gradle/caches/modules-2/modules-2.lock"
+               sh "rm -fr /var/lib/jenkins/.gradle/caches/*/plugin-resolution/"
+          }
+      }
+      
+      stage('Cloning from Git') { 
+          steps { 
+              git url: 'https://github.com/apache/fineract.git', branch: 'develop' 
+          }
+      } 
+      
+      
+      stage('Test & Static Code Analysis') {
+          steps {
+              sh 'sed -i "s/8443/8444/g" integration-tests/build.gradle'
+              // sh './gradlew -q --no-daemon --console=plain -x rat -x test -Pcoverage=true'
+              sh './gradlew -q --no-daemon --console=plain -x rat -Pcoverage=true'
+          }
+      }
+     
+      
+      stage('Building IBM QA image') { 
+          steps { 
+              sh './gradlew :fineract-provider:jibDockerBuild'
+              sh 'java --version'
+              sh 'docker image tag fineract:latest ' + registryIBM + ':latest'
+          } 
+      }
+      
+      stage('Deploy IBM QA image') { 
+          steps { 
+              script { 
+                   docker.withRegistry('https://us.icr.io', registryCredentialIBM) {
+		                docker.image(registryIBM + ':latest').push()
+                    }
+              }  
+          }
+      } 
+
+      stage('Cleaning up') { 
+          steps { 
+              sh "docker image rmi -f \$(docker image ls -q) 2>&1 || true"
+              sh "rm -f  $HOME/.gradle/caches/modules-2/modules-2.lock"
+              sh "rm -fr $HOME/.gradle/caches/*/plugin-resolution/"
+          }
+      } 
+    }
+}
