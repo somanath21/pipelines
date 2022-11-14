@@ -1,0 +1,30 @@
+pipeline {
+    environment { 
+      //registry = "oaftech.azurecr.io/phee-ns/ph-ee-operations-app" 
+      //registryCredential = 'azdockerpass' 
+      registryIBM = "us.icr.io/phee-ns/fineract" 
+      registryCredentialIBM = 'ibmcr'
+      //registrySawtel = "fynarfin.azurecr.io/ph-ee-ops-bk" 
+      //registrySawtelCredential = 'sawteldockerpass'
+    }    
+    
+	agent any
+	
+	stages {
+		stage('Run Pentaho Script') {
+			steps {
+				sh '/var/lib/jenkins/fineract-pentaho-ci.sh'
+			}
+		}
+		
+        stage('Deploy IBM QA image') { 
+          steps { 
+              script { 
+                   docker.withRegistry('https://us.icr.io', registryCredentialIBM) {
+                        docker.image(registryIBM + ':pentaho-enabled-fineract').push()
+                    }
+              }  
+          }
+        } 		
+	}
+}
