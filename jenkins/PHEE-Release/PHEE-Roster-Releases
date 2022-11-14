@@ -1,0 +1,85 @@
+pipeline { 
+
+  environment { 
+      registry = "oaftech.azurecr.io/phee-ns/ph-ee-connector-ams-pesa" 
+      registryCredential = 'azdockerpass' 
+      registryIBM = "us.icr.io/phee-ns/phee-connector-ams-pesa" 
+      registryCredentialIBM = 'ibmcr'
+      tag = 'v1.0.3'
+      gitcode = 'https://github.com/openmf/ph-ee-connector-ams-pesa.git' 
+  }
+  
+  options {
+        skipStagesAfterUnstable()
+  }
+
+  agent any 
+
+  stages { 
+      stage('Init'){
+          steps{
+              script {
+                currentBuild.description = "Tag: ${tag}"
+              }
+          }
+      }
+      stage('Cloning from Git') { 
+          steps { 
+              
+              checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: gitcode ]], branches: [[name: 'refs/tags/' + "${tag}"]]], poll: false
+          
+          }
+      } 
+      
+      stage('Building JAR') {
+          steps {
+              sh './gradlew clean bootJar'
+          }
+      }
+
+      stage('Building OAF Azure image') { 
+          steps { 
+              script { 
+                  dockerImage = docker.build registry + ":${tag}" 
+              }
+          } 
+      }
+
+      stage('Deploy OAF Azure image') { 
+          steps { 
+              script { 
+                  docker.withRegistry( 'https://oaftech.azurecr.io', registryCredential ) { 
+                      dockerImage.push()
+                  }
+              } 
+          }
+      } 
+      
+      
+      
+     /* stage('Building IBM QA image') { 
+          steps { 
+              script { 
+                  dockerImage = docker.build registryIBM + ":${tag}" 
+              }
+          } 
+      }
+      
+      stage('Deploy IBM QA image') { 
+          steps { 
+              script { 
+                  docker.withRegistry( 'https://us.icr.io', registryCredentialIBM ) {
+                      dockerImage.push()
+                  }
+              }  
+          }
+      } */
+
+      stage('Cleaning up') { 
+          steps { 
+             
+              sh "docker image rmi -f \$(docker image ls -q) 2>&1 || true" 
+          }
+      } 
+    }
+}
