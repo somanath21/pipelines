@@ -1,0 +1,137 @@
+pipeline { 
+
+ tools {
+  jdk 'Java11'
+ }
+ 
+  environment { 
+    //   registry = "oaftech.azurecr.io/phee-ns/ph-ee-notifications" 
+    //   registryCredential = 'azdockerpass'
+    //   registryIBM = "us.icr.io/phee-ns/ph-ee-notifications" 
+    //   registryCredentialIBM = 'ibmcr'
+    //   baseRegistryIBM = "https://us.icr.io"
+    //   registryIBM =  "us.icr.io/phee-ns/ph-ee-notifications" 
+    //   registryCredentialIBM = 'ibmcr'
+      baseRegistryAWS = "https://419830066942.dkr.ecr.ap-south-1.amazonaws.com"
+      registryAWS =  "419830066942.dkr.ecr.ap-south-1.amazonaws.com/ph-ee-notifications" 
+      registryCredentialAWS = 'fynawsecr'
+      tag = sh(returnStdout: true, script: "git rev-parse --short=10 HEAD | sed 's/[^a-zA-Z0-9]/-/g'").trim()
+
+    //   registrySawtel = "fynarfin.azurecr.io/ph-ee-notifications" 
+    //   registrySawtelCredential = 'sawteldockerpass'
+    //   tag = sh(returnStdout: true, script: "git rev-parse --short=10 HEAD | sed 's/[^a-zA-Z0-9]/-/g'").trim()
+      
+  }
+  
+  options {
+        skipStagesAfterUnstable()
+  }
+  
+  triggers { 
+    githubPush() 
+  }
+
+  agent any 
+
+   
+  stages { 
+      stage('Cloning from Git') { 
+          steps { 
+              git url: 'https://github.com/openmf/ph-ee-notifications.git', branch: 'master' 
+          }
+      }
+      stage('Cleaning up') { 
+          steps { 
+              sh "docker image rmi -f \$(docker image ls -q) 2>&1 || true" 
+          }
+      }
+      
+      stage('Building JAR') {
+          steps {
+              sh './gradlew clean bootJar'
+          }
+      }
+  
+       stage('Building AWS QA image') { 
+          steps { 
+              script { 
+                  dockerImage = docker.build registryAWS + ":latest" 
+                  dockerImage2 = docker.build registryAWS + ":${tag}" 
+              }
+          } 
+      }
+      
+      stage('push AWS QA image') { 
+          steps { 
+              script { 
+                  docker.withRegistry( baseRegistryAWS, registryCredentialAWS ) { 
+                      dockerImage.push()
+                      dockerImage2.push()
+                  }
+              }  
+          }
+      }
+      
+    //   stage('Building IBM QA image') { 
+    //       steps { 
+    //           script { 
+    //               dockerImage = docker.build registryIBM + ":latest" 
+    //               dockerImage2 = docker.build registryIBM + ":${tag}" 
+    //           }
+    //       } 
+    //   }
+      
+    //   stage('Push IBM QA image') { 
+    //       steps { 
+    //           script { 
+    //               docker.withRegistry( baseRegistryIBM, registryCredentialIBM ) { 
+    //                   dockerImage.push()
+    //                   dockerImage2.push()
+    //               }
+    //           }  
+    //       }
+    //   } 
+    
+    //   stage('Building OAF Azure image') { 
+    //       steps { 
+    //           script { 
+    //               dockerImage = docker.build registryIBM + ":latest" 
+    //               dockerImage2 = docker.build registryIBM + ":${tag}" 
+                   
+    //           }
+    //       } 
+    //   }
+
+    //   stage('Deploy OAF Azure image') { 
+    //       steps { 
+    //           script { 
+    //               docker.withRegistry( 'https://oaftech.azurecr.io', registryCredential ) { 
+    //                   dockerImage.push() 
+    //                   dockerImage2.push()
+                      
+    //               }
+    //           } 
+    //       }
+    //   } 
+      
+    //   stage('Building Sawtel Azure image') { 
+    //       steps { 
+    //           script { 
+    //               dockerImage = docker.build registrySawtel + ":latest" 
+    //               dockerImage2 = docker.build registrySawtel + ":${tag}" 
+    //           }
+    //       } 
+    //   }
+
+    //   stage('Deploy Sawtel Azure image') { 
+    //       steps { 
+    //           script { 
+    //               docker.withRegistry( 'https://fynarfin.azurecr.io', registrySawtelCredential ) { 
+    //                   dockerImage.push() 
+    //                   dockerImage2.push()
+    //               }
+    //           } 
+    //       }
+     
+    }
+}

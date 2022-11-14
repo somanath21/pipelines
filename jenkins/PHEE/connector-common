@@ -1,0 +1,37 @@
+pipeline { 
+
+    environment { 
+        registry = "https://fynarfin.jfrog.io/artifactory"
+        repoKey = 'fyn-libs-snapshot'
+        registryCredential = 'jfrog' 
+        tag = 'v1.1.0'
+        gitcode = 'https://github.com/openmf/ph-ee-connector-common.git'
+    }
+    
+    options {
+          skipStagesAfterUnstable()
+    }
+  
+    agent any 
+  
+    stages { 
+        stage('Cloning from Git') { 
+            steps { 
+                checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: gitcode ]], branches: [[name: 'refs/tags/' + "${tag}"]]], poll: false
+            }
+        } 
+        
+        stage('Building JAR') {
+            steps {
+                sh './gradlew build'
+            }
+        }
+        
+        
+        stage('Deploy to Artifactory') { 
+            steps { 
+                sh './gradlew artifactoryPublish'
+            }
+        } 
+    }
+  }

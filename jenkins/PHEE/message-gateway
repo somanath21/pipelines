@@ -1,0 +1,57 @@
+pipeline { 
+
+  environment { 
+      baseRegistryAWS = "https://419830066942.dkr.ecr.ap-south-1.amazonaws.com"
+      registryAWS =  "419830066942.dkr.ecr.ap-south-1.amazonaws.com/phee-message-gateway" 
+      registryCredentialAWS = 'fynawsecr'
+      tag = sh(returnStdout: true, script: "git rev-parse --short=10 HEAD | sed 's/[^a-zA-Z0-9]/-/g'").trim()
+  }
+  
+  options {
+        skipStagesAfterUnstable()
+  }
+
+  agent any 
+
+  stages { 
+      stage('Cloning from Git') { 
+          steps { 
+              git 'https://github.com/openmf/message-gateway.git' 
+          }
+      } 
+      
+      stage('Cleaning up') { 
+          steps { 
+              sh "docker image rmi -f \$(docker image ls -q) 2>&1 || true"
+          }
+      }
+      stage('Building JAR') {
+          steps {
+              sh './gradlew bootJar'
+          }
+      }
+      
+     
+      stage('Building AWS QA image') { 
+          steps { 
+              script { 
+                  dockerImage = docker.build registryAWS + ":latest" 
+                  dockerImage2 = docker.build registryAWS + ":${tag}" 
+              }
+          } 
+      }
+      
+      stage('Push AWS QA image') { 
+          steps { 
+              script { 
+                  docker.withRegistry( baseRegistryAWS, registryCredentialAWS ) { 
+                      dockerImage.push()
+                      dockerImage2.push()
+                  }
+              }  
+          }
+      }
+       
+      
+    }
+}
