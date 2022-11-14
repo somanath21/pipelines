@@ -1,0 +1,57 @@
+pipeline { 
+
+  environment { 
+      registryIBM = "us.icr.io/phee-ns/phee-es-importer" 
+      registryCredentialIBM = 'ibmcr'
+      tag = sh(returnStdout: true, script: "git rev-parse --short=10 HEAD | sed 's/[^a-zA-Z0-9]/-/g'").trim()
+  }
+  
+  options {
+        skipStagesAfterUnstable()
+  }
+
+  agent any 
+
+ stages { 
+      stage('Cloning from Git') { 
+          steps { 
+              git url: 'https://github.com/ankita10r/ph-ee-importer-es/', branch: 'newBranch' 
+          }
+      }
+      
+      stage('Building JAR') {
+          steps {
+              sh './gradlew bootJar'
+          }
+      }
+
+         
+      stage('Building IBM QA image') { 
+          steps { 
+              script { 
+                  dockerImage = docker.build registryIBM + ":latest"
+                  dockerImage2 = docker.build registryIBM + ":${tag}"
+              }
+          } 
+      }
+      
+      stage('Deploy IBM QA image') { 
+          steps { 
+              script { 
+                  docker.withRegistry( 'https://us.icr.io', registryCredentialIBM ) { 
+                      dockerImage.push() 
+                      dockerImage2.push()
+                  }
+              }  
+          }
+      } 
+        
+      stage('Cleaning up') { 
+          steps { 
+              sh "docker rmi $registry:latest" 
+              sh "docker rmi $registryIBM:latest"
+              sh "docker image rmi -f \$(docker image ls -q) 2>&1 || true"
+          }
+      } 
+    }
+}
