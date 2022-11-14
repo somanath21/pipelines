@@ -1,0 +1,49 @@
+pipeline { 
+
+  environment { 
+      //tag = sh(returnStdout: true, script: "git rev-parse --short=10 HEAD | sed 's/[^a-zA-Z0-9]/-/g'").trim()
+      tag = 'v1.0.0'
+      gitcode = 'https://github.com/somanath21/ph-ee-env-labs.gitt'
+  }
+  
+  options {
+        skipStagesAfterUnstable()
+  }
+  
+  triggers { 
+    githubPush() 
+  }
+
+  agent any
+
+   
+  stages { 
+      stage('Init'){
+          steps{
+              script {
+                currentBuild.description = "Tag: ${tag}"
+              }
+          }
+      }
+      stage('Cloning from Git') { 
+          steps { 
+              git url: 'https://github.com/somanath21/ph-ee-env-labs.git/', branch: 'branch15'
+          }
+      } 
+      
+      stage('Helm Lint') {
+          steps {
+              sh 'helm lint helm/superset'
+          }
+      }
+      
+      stage('Build Helm Chart') { 
+          steps {
+              sh 'rm -f helm/superset/Chart.lock helm/superset/requirements.lock helm/superset/charts/*'
+              sh 'helm dep up helm/superset'
+              sh 'helm package helm/superset'
+              sh 'helm repo index .'
+          }
+      }
+  }
+}
