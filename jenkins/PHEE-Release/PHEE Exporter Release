@@ -1,0 +1,51 @@
+pipeline { 
+
+  environment { 
+      registry = "https://fynarfin.jfrog.io/artifactory"
+      repoKey = 'fyn-libs-snapshot'
+      registryCredential = 'jfrog' 
+      tag = 'v1.1.0'
+      gitcode = 'https://github.com/openMF/ph-ee-exporter.git'
+  }
+  
+  options {
+        skipStagesAfterUnstable()
+  }
+
+  agent any 
+
+  stages { 
+      stage('Init'){
+          steps{
+              script {
+                currentBuild.description = "Tag: ${tag}"
+              }
+          }
+      }
+      stage('Cloning from Git') { 
+          steps { 
+              checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: gitcode ]], branches: [[name: 'refs/tags/' + "${tag}"]]], poll: false
+          }
+      } 
+      
+      stage('Building JAR') {
+          steps {
+              sh './gradlew build'
+          }
+      }
+      
+      stage('Pushing Artifact') {
+          steps {
+              sh  'scp -o StrictHostKeyChecking=No -i /var/lib/jenkins/fynarfin.pem "/var/lib/jenkins/workspace/PHEE Exporter Release/build/libs/exporter-1.1.0-SNAPSHOT.jar" ec2-user@13.233.68.128:~/'
+              sh  'ssh -i /var/lib/jenkins/fynarfin.pem -o StrictHostKeyChecking=No ec2-user@13.233.68.128 sudo mv -t /apps/apache-tomcat-7.0.82/webapps/ROOT/images/ exporter-1.1.0-SNAPSHOT.jar'
+          }
+      }
+      
+      
+    //   stage('Deploy to Artifactory') { 
+    //       steps { 
+    //           sh './gradlew artifactoryPublish'
+    //       }
+    //   } 
+  }
+}
