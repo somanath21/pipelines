@@ -1,0 +1,85 @@
+pipeline { 
+
+  environment { 
+      registryIBM = "us.icr.io/phee-ns/fineract" 
+      registryCredentialIBM = 'ibmcr'
+  }
+  
+  options {
+        skipStagesAfterUnstable()
+  }
+  
+  triggers { 
+    githubPush() 
+  }
+
+  agent any 
+
+   
+  stages { 
+      
+      stage('Pre Build Cache Clean') {
+          steps {
+               sh "rm -f  /var/lib/jenkins/.gradle/caches/modules-2/modules-2.lock"
+               sh "rm -fr /var/lib/jenkins/.gradle/caches/*/plugin-resolution/"
+          }
+      }
+      
+      stage('Cloning from Git') { 
+          steps { 
+              git url: 'https://github.com/openMF/community-app.git', branch: 'develop' 
+          }
+      } 
+      
+   
+      stage('White Label') {
+          steps {
+              
+                // Replace Mifos X strings in Locale file(s)
+                sh "sed -i 's/\"Mifos X//g' ./app/global-translations/locale-en.json"
+                
+                // Replace Logo Files              
+                sh "cp /var/lib/jenkins/community-app-whitelabeling-logos/MifosX_Logo.png ./app/images/MifosX_Logo.png"
+                sh "cp /var/lib/jenkins/community-app-whitelabeling-logos/MifosX_LogoSmall.png ./app/images/MifosX_LogoSmall.png"
+                sh "cp /var/lib/jenkins/community-app-whitelabeling-logos/favicon.ico ./app/images/favicon.ico"
+                sh "cp /var/lib/jenkins/community-app-whitelabeling-logos/loader.gif ./app/images/loader.gif"
+                sh "cp /var/lib/jenkins/community-app-whitelabeling-logos/logo.jpg ./app/images/logo.jpg"
+                sh "cp /var/lib/jenkins/community-app-whitelabeling-logos/mifos-logo-flat.png ./app/images/mifos-logo-flat.png"
+                sh "cp /var/lib/jenkins/community-app-whitelabeling-logos/mifos_lg-logo.jpg ./app/images/mifos_lg-logo.jpg"
+                
+                // Alter index.html file
+                sh "sed -i ./app/index.html -re '19,22d'"
+                sh "sed -i ./app/index.html -re '199,246d'"
+                sh "sed -i ./app/index.html -re '255,258d'"
+                sh "sed -i 's/{{response.uiDisplayConfigurations.whiteLabel.loginPage.companyName}}/IBank /g' ./app/index.html"
+                sh "sed -i 's/<a href=\"https:\\/\\/mifosforge.jira.com\\/browse\\/MIFOSX\\/component\\/11710\\/?selectedTab=com.atlassian.jira.jira-projects-plugin:component-changelog-panel\" target=\"_blank\">//g' ./app/index.html"
+          }
+      }   
+   
+    stage('Building IBM QA image') { 
+          steps { 
+              script { 
+                  dockerImage = docker.build registryIBM + ":latest" 
+              }
+          } 
+      }
+      
+      stage('Deploy IBM QA image') { 
+          steps { 
+              script { 
+                  docker.withRegistry( 'https://us.icr.io', registryCredentialIBM ) { 
+                      dockerImage.push() 
+                  }
+              }  
+          }
+      } 
+
+      stage('Cleaning up') { 
+          steps { 
+              sh "docker image rmi -f \$(docker image ls -q) 2>&1 || true"
+              sh "rm -f  $HOME/.gradle/caches/modules-2/modules-2.lock"
+              sh "rm -fr $HOME/.gradle/caches/*/plugin-resolution/"
+          }
+      } 
+    }
+}
