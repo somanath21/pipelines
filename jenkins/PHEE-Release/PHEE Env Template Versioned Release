@@ -1,0 +1,73 @@
+pipeline { 
+
+  environment { 
+     //recent_tag = sh(returnStdout: true, script: "git rev-parse --short=10 HEAD | sed 's/[^a-zA-Z0-9]/-/g'").trim()
+     tag = "v1.3.0"
+     gitcode = 'https://github.com/openMF/ph-ee-env-template'
+  }
+  
+  options {
+        skipStagesAfterUnstable()
+  }
+  
+  triggers { 
+    githubPush() 
+  }
+
+  agent any
+
+   
+  stages { 
+      stage('Init'){
+          steps{
+              script {
+                currentBuild.description = "Tag: ${tag}"
+              }
+          }
+      }
+      stage('Cloning from Git') { 
+           steps {
+               //git gitcode
+               checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: gitcode ]], branches: [[name: 'refs/tags/' + "${tag}"]]], poll: false
+          }
+      } 
+  
+  
+      stage('Helm Lint') {
+           steps {
+              sh 'helm lint helm/ph-ee-engine'
+          }
+      }
+
+      
+         stage('Build PH-EE-ENGINE Helm Chart') { 
+          steps {
+              sh 'rm -f helm/ph-ee-engine/Chart.lock helm/ph-ee-engine/requirements.lock helm/ph-ee-engine/charts/*'
+              sh 'helm dep up helm/ph-ee-engine'
+              sh 'helm package helm/ph-ee-engine'
+              sh 'helm repo index .'
+          }
+      }
+      
+      stage('Uploading PH-EE-ENGINE Helm Chart') {
+          environment { 
+            phee_engine_release_tag = sh(returnStdout: true, script: ". ./fetch-release-tag.sh").trim()
+          }
+          steps {
+            
+             sh 'echo $phee_engine_release_tag'
+             sh  'scp -o StrictHostKeyChecking=No -i /var/lib/jenkins/fynarfin.pem index.yaml $phee_engine_release_tag.tgz ec2-user@13.233.68.128:~/'
+             sh  'ssh -i /var/lib/jenkins/fynarfin.pem -o StrictHostKeyChecking=No ec2-user@13.233.68.128 sudo mv -t /apps/apache-tomcat-7.0.82/webapps/ROOT/images/ index.yaml $phee_engine_release_tag.tgz'
+          }
+      }
+      
+      stage ('AWS SIT PHEE Versioned Release') {
+            steps {
+               build job: 'AWS SIT PHEE Versioned Release'
+            }
+        }
+
+  }
+  
+}
+      
