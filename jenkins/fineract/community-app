@@ -1,0 +1,66 @@
+pipeline { 
+
+  environment { 
+      registry = "fynarfin.azurecr.io/community-app" 
+      registryCredential = 'sawteldockerpass' 
+      registryIBM = "us.icr.io/phee-ns/community-app" 
+      registryCredentialIBM = 'ibmcr' 
+  }
+  
+  options {
+        skipStagesAfterUnstable()
+  }
+
+  agent any 
+
+  stages { 
+      stage('Cloning from Git') { 
+          steps { 
+              git url:'https://github.com/openmf/community-app.git', branch: 'develop' 
+          }
+      } 
+
+      stage('Building Sawtel Azure image') { 
+          steps { 
+              script { 
+                  dockerImage = docker.build registry + ":latest" 
+              }
+          } 
+      }
+
+      stage('Deploy Sawtel Azure image') { 
+          steps { 
+              script { 
+                  docker.withRegistry( 'https://fynarfin.azurecr.io', registryCredential ) { 
+                      dockerImage.push() 
+                  }
+              } 
+          }
+      } 
+      
+      stage('Building IBM QA image') { 
+          steps { 
+              script { 
+                  dockerImage = docker.build registryIBM + ":latest" 
+              }
+          } 
+      }
+      
+      stage('Deploy IBM QA image') { 
+          steps { 
+              script { 
+                  docker.withRegistry( 'https://us.icr.io', registryCredentialIBM ) { 
+                      dockerImage.push() 
+                  }
+              }  
+          }
+      }
+
+      stage('Cleaning up') { 
+          steps { 
+              sh "docker rmi $registry:latest" 
+              sh "docker rmi $registryIBM:latest"
+          }
+      } 
+    }
+}
