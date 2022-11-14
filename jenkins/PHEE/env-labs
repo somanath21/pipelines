@@ -1,0 +1,40 @@
+pipeline { 
+
+  environment { 
+      tag = sh(returnStdout: true, script: "git rev-parse --short=10 HEAD | sed 's/[^a-zA-Z0-9]/-/g'").trim()
+  }
+  
+  options {
+        skipStagesAfterUnstable()
+  }
+  
+  triggers { 
+    githubPush() 
+  }
+
+  agent any
+
+   
+  stages { 
+      stage('Cloning from Git') { 
+          steps { 
+              git url: 'https://github.com/fynarfin/ph-ee-env-labs.git/', branch: 'master' 
+          }
+      } 
+  
+
+      stage('Deploy Helm Chart') { 
+          steps {
+              sh 'rm -f helm/oaf/Chart.lock helm/oaf/requirements.lock helm/oaf/charts/*'
+              sh 'helm dep up helm/oaf'
+              sh 'echo $HOME'
+              sh 'kubectl config use-context oaf-uat'
+              sh 'helm upgrade -f helm/oaf/values.yaml phee-oaf  helm/oaf --install'
+          }
+      }
+      
+
+  }
+  
+}
+      
