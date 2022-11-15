@@ -1,0 +1,63 @@
+pipeline {
+    
+    environment {
+         AWS_DEFAULT_PROFILE= "codevelop"
+         AWS_PROFILE="codevelop"
+    }
+    
+    agent any
+    
+    stages {
+        stage('GIT CLONE') { 
+          steps { 
+              git url: 'https://github.com/openMF/ph-ee-env-labs.git/', branch: 'master'
+          }
+        }
+        
+        stage('DEPLOYING HELM CHART') { 
+          steps {
+              sh 'echo $AWS_PROFILE'
+              sh 'echo $AWS_DEFAULT_PROFILE'
+              sh 'kubectl config use-context arn:aws:eks:ap-south-1:009412119804:cluster/Mifos'
+              sh 'kubectl config get-contexts'
+              sh 'rm -f helm/g2p-sandbox/Chart.lock helm/g2p-sandbox/requirements.lock helm/g2p-sandbox/charts/*'
+            //   sh 'helm repo add fyn https://fynarfin.io/images/'
+              sh 'helm dep up helm/g2p-sandbox'
+              //sh 'echo $HOME'
+              sh 'helm upgrade -f helm/g2p-sandbox/values.yaml g2pconnect helm/g2p-sandbox --install --create-namespace --namespace default'
+              //sh 'helm upgrade -f helm/g2p-sandbox/values.yaml ph-ee-barebone  helm/g2p-sandbox --install'
+          }
+        }
+       /* stage('WAITING FOR PODS') {
+            when {
+                expression { params.BPMN == 'Enable' }
+            }
+            steps {
+                echo "I am going to sleep for 2 minutes"
+                sleep(time:120,unit:"SECONDS")
+            }
+        }
+        stage('DEPLOYING BPMNS') {
+            when {
+                expression { params.BPMN == 'Enable' }
+            }
+            steps {
+                sh """#!/bin/bash
+                HOST="${ENDPOINT}/zeebe/upload"
+                deploy(){
+                    cmd="curl --insecure --location --request POST \$HOST \
+                    --header 'Platform-TenantId: ibank-india' \
+                    --form 'file=@"\$PWD/\$1"'"
+                    echo \$cmd
+                    eval \$cmd
+                }
+
+                LOC=orchestration/feel/*.bpmn
+                for f in \$LOC; do
+                    deploy \$f
+                done
+                """
+            }
+       }*/
+    }
+}
