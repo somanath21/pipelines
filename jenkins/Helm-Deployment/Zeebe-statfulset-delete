@@ -1,0 +1,40 @@
+pipeline {
+    environment {
+         AWS_DEFAULT_PROFILE= "sit"
+         AWS_PROFILE="sit"
+    }
+    
+    agent any
+    
+        
+    stages {
+        
+        stage('delete') {
+          steps {
+              sh 'echo $AWS_PROFILE'
+              sh 'echo $AWS_DEFAULT_PROFILE'
+              sh 'kubectl config use-context arn:aws:eks:us-east-2:419830066942:cluster/sit'
+              sh 'kubectl config get-contexts'
+              sh 'kubectl delete statefulsets zeebe-zeebe --grace-period=0 --force'
+              sh 'kubectl delete pvc -l  data-zeebe-zeebe-0 --grace-period=0 --force' 
+              sleep(time:10,unit:"SECONDS")
+          }
+       }  
+       
+        stage ('Helm Upgrade') {
+            steps {
+              build job: 'AWS SIT PHEE Versioned Release'
+            }
+        }
+        
+        // stage ('Testing Zeebe Health') {
+        //     steps {
+        //         //curl request for channel collection API
+        //     }
+        // }
+              
+        
+     
+    }
+
+}
